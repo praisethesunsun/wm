@@ -1,0 +1,6 @@
+{
+  "name": "午高峰外卖平台",
+  "description": "基于 React 双前端 + NestJS 后端架构的内存态演练外卖平台架构。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

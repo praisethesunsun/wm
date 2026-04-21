@@ -1,0 +1,144 @@
+# ------------------- DATA LAYER -------------------
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: "mysql"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "root"
+        - name: MYSQL_DATABASE
+          value: "lunch_rush"
+        ports:
+        - containerPort: 3306
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  ports:
+  - port: 6379
+  selector:
+    app: redis
+
+# ------------------- APP LAYER -------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lunch-rush-api
+  labels:
+    component: api
+spec:
+  replicas: 2 # Horizontal Scaling validation
+  selector:
+    matchLabels:
+      app: lunch-rush-api
+  template:
+    metadata:
+      labels:
+        app: lunch-rush-api
+    spec:
+      containers:
+      - name: api
+        image: lunch-rush:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DATABASE_URL
+          value: "mysql://root:root@mysql:3306/lunch_rush"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lunch-rush-api-svc
+spec:
+  selector:
+    app: lunch-rush-api
+  ports:
+  - port: 80
+    targetPort: 3000
+
+# ------------------- WORKER LAYER -------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lunch-rush-worker
+  labels:
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lunch-rush-worker
+  template:
+    metadata:
+      labels:
+        app: lunch-rush-worker
+    spec:
+      containers:
+      - name: worker
+        image: lunch-rush:latest
+        imagePullPolicy: IfNotPresent
+        command: ["npx", "tsx", "apps/api/src/worker.ts"]
+        env:
+        - name: DATABASE_URL
+          value: "mysql://root:root@mysql:3306/lunch_rush"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
